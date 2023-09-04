@@ -1,0 +1,138 @@
+package com.itm.space.backendresources;
+
+import com.itm.space.backendresources.api.request.UserRequest;
+import com.itm.space.backendresources.exception.BackendResourcesException;
+import lombok.SneakyThrows;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.admin.client.resource.RoleMappingResource;
+import org.keycloak.admin.client.resource.UserResource;
+import org.keycloak.admin.client.resource.UsersResource;
+import org.keycloak.representations.idm.MappingsRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
+import org.mockito.ArgumentMatchers;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.test.context.support.WithMockUser;
+
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Response;
+import java.util.UUID;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@WithMockUser(username = "User", password = "User", authorities = "ROLE_MODERATOR")
+public class ControllerTest extends BaseIntegrationTest {
+
+    @MockBean
+    private Keycloak keycloak;
+    private RealmResource realmResource;
+    private UsersResource usersResource;
+    private Response response;
+    private UserRequest userRequest;
+    private UserRequest invalidUserRequest;
+    private UserRepresentation userRepresentation;
+    private UserResource userResource;
+    private UUID testID;
+    private RoleMappingResource roleMappingResource;
+    private MappingsRepresentation mappingsRepresentation;
+
+    @BeforeEach
+    void setUp() {
+        realmResource = mock(RealmResource.class);
+        usersResource = mock(UsersResource.class);
+        response = mock(Response.class);
+        userRequest = new UserRequest("test", "test@gmail.com", "test",
+                "alfa", "centavra");
+        invalidUserRequest = new UserRequest("", "", "", "", "");
+        userRepresentation = mock(UserRepresentation.class);
+        userResource = mock(UserResource.class);
+        testID = UUID.randomUUID();
+        roleMappingResource = mock(RoleMappingResource.class);
+        mappingsRepresentation = mock(MappingsRepresentation.class);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testCreateUser() {
+        when(keycloak.realm(ArgumentMatchers.anyString())).thenReturn(realmResource);
+        when(realmResource.users()).thenReturn(usersResource);
+        when(usersResource.create(ArgumentMatchers.any(UserRepresentation.class))).thenReturn(response);
+        when(response.getStatusInfo()).thenReturn(Response.Status.CREATED);
+
+        this.mvc.perform(requestWithContent(post("/api/users"), userRequest))
+                .andDo(print())
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testCreateUserFailed() {
+        when(keycloak.realm(ArgumentMatchers.anyString())).thenReturn(realmResource);
+        when((realmResource.users())).thenReturn(usersResource);
+        when(usersResource.create(ArgumentMatchers.any(UserRepresentation.class)))
+                .thenThrow(new WebApplicationException("Error", Response.Status.BAD_REQUEST));
+
+        this.mvc.perform(requestWithContent(post("/api/users"), userRequest))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testCreateInvalidUser() {
+        this.mvc.perform(requestWithContent(post("/api/users"), invalidUserRequest))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testGetUserById() {
+        when(keycloak.realm(ArgumentMatchers.anyString())).thenReturn(realmResource);
+        when(realmResource.users()).thenReturn(usersResource);
+        when(usersResource.get(String.valueOf(testID))).thenReturn(userResource);
+        when(userResource.toRepresentation()).thenReturn(userRepresentation);
+        when(userResource.roles()).thenReturn(roleMappingResource);
+        when(roleMappingResource.getAll()).thenReturn(mappingsRepresentation);
+        this.mvc.perform(get("/api/users/" + testID))
+                .andDo(print())
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testGetUserByIdFailed() {
+        when(keycloak.realm(ArgumentMatchers.anyString())).thenReturn(realmResource);
+        when(realmResource.users()).thenReturn(usersResource);
+        when(realmResource.users().get(String.valueOf(eq(testID)))).thenThrow(new BackendResourcesException("message"
+                , HttpStatus.INTERNAL_SERVER_ERROR));
+
+        this.mvc.perform(get("/api/users/" + testID))
+                .andDo(print())
+                .andExpect(status().is5xxServerError());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testHelloController() {
+        mvc.perform(get("/api/users/hello"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("User")));
+    }
+}
