@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@WithMockUser(username = "User", password = "User", authorities = "ROLE_MODERATOR")
+@WithMockUser(username = "test", password = "test", authorities = "ROLE_MODERATOR")
 public class ControllerTest extends BaseIntegrationTest {
 
     @MockBean
